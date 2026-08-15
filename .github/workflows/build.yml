@@ -1,89 +1,91 @@
-name: Build PassWall Xray OpenWrt 25.12 x86_64
+name: Build PassWall Xray IPK
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-
     runs-on: ubuntu-22.04
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Checkout small
-      uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            build-essential \
+            clang \
+            flex \
+            bison \
+            gawk \
+            gettext \
+            libncurses-dev \
+            libssl-dev \
+            python3 \
+            python3-distutils \
+            rsync \
+            unzip \
+            zstd
 
+      - name: Download OpenWrt SDK 25.12 x86_64
+        run: |
+          wget https://downloads.openwrt.org/releases/25.12.0/targets/x86/64/openwrt-sdk-25.12.0-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
 
-    - name: Install build tools
-      run: |
-        sudo apt update
-        sudo apt install -y zstd build-essential rsync unzip
+          tar --use-compress-program=unzstd \
+            -xf openwrt-sdk-25.12.0-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
 
+          mv openwrt-sdk-* sdk
 
-    - name: Download OpenWrt 25.12 SDK
-      run: |
-        wget -q https://downloads.openwrt.org/releases/25.12.0/targets/x86/64/openwrt-sdk-25.12.0-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
+      - name: Add feeds
+        run: |
+          cd sdk
 
-        tar --use-compress-program=unzstd \
-          -xf openwrt-sdk-25.12.0-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
-
-        mv openwrt-sdk-* sdk
-
-
-    - name: Prepare feeds
-      run: |
-
-        cd sdk
-
-        cat > feeds.conf.default <<EOF
+          cat > feeds.conf.default <<EOF
 src-git packages https://github.com/openwrt/packages.git
 src-git luci https://github.com/openwrt/luci.git
 src-git routing https://github.com/openwrt/routing.git
-src-git small $GITHUB_WORKSPACE
+src-git small https://github.com/kenzok8/small.git
 EOF
 
+      - name: Update feeds
+        run: |
+          cd sdk
+          ./scripts/feeds update -a
 
-    - name: Update feeds
-      run: |
+      - name: Install PassWall feed
+        run: |
+          cd sdk
+          ./scripts/feeds install -p small -f luci-app-passwall
+          ./scripts/feeds install -p small -f xray-core
+          ./scripts/feeds install -p small -f v2ray-geodata
 
-        cd sdk
+      - name: Configure SDK
+        run: |
+          cd sdk
+          make defconfig
 
-        ./scripts/feeds update -a
+      - name: Build packages
+        run: |
+          cd sdk
 
-        ./scripts/feeds install -a
+          make package/feeds/small/luci-app-passwall/compile V=s
 
+          make package/feeds/small/xray-core/compile V=s || true
 
-    - name: Configure SDK
-      run: |
+          make package/feeds/small/v2ray-geodata/compile V=s || true
 
-        cd sdk
+      - name: Collect IPK
+        run: |
+          mkdir output
 
-        make defconfig
+          find sdk/bin/packages \
+            -name "*.ipk" \
+            -exec cp {} output/ \;
 
-
-    - name: Compile PassWall
-      run: |
-
-        cd sdk
-
-        make package/feeds/small/luci-app-passwall/compile V=s
-
-
-    - name: Collect packages
-      run: |
-
-        mkdir -p output
-
-        find sdk/bin/packages \
-          -name "*.ipk" \
-          -exec cp {} output/ \;
-
-
-    - name: Upload IPK
-      uses: actions/upload-artifact@v4
-
-      with:
-
-        name: PassWall-Xray-OpenWrt25.12-x86_64
-
-        path: output/
+      - name: Upload IPK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PassWall-Xray-OpenWrt25.12-x86_64
+          path: output/
