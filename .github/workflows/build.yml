@@ -1,10 +1,10 @@
-name: T2 Build x86_64 OpenWrt 25.12
+name: T2 Build x86_64 25.12
 
 on:
   workflow_dispatch:
     inputs:
       plugins:
-        description: '留空=默认PassWall相关包，或者输入指定包名'
+        description: 'Input: empty/*=default packages, or package name(s)'
         required: false
         default: ''
 
@@ -16,17 +16,15 @@ jobs:
 
     runs-on: ubuntu-latest
 
-
     steps:
 
-      - name: Checkout
-        uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6.0.2
 
         with:
           fetch-depth: 0
 
 
-      - name: Get packages
+      - name: Get packages to build
 
         id: packages
 
@@ -36,26 +34,7 @@ jobs:
 
           if [ -z "$input" ] || [ "$input" == "*" ]; then
 
-            PACKAGES="
-            luci-app-passwall
-            luci-app-passwall2
-            xray-plugin
-            v2ray-core
-            v2ray-geodata
-            v2ray-geoip
-            v2ray-geosite
-            sing-box
-            hysteria
-            hysteria2
-            naiveproxy
-            brook
-            redsocks2
-            ipt2socks
-            dns2socks
-            tcping
-            chinadns-ng
-            dnsmasq-full
-            "
+            PACKAGES="luci-app-passwall luci-app-passwall2 xray-plugin v2ray-core v2ray-geodata sing-box hysteria ipt2socks pdnsd-alt redsocks2 shadow-tls trojan tuic-client naiveproxy"
 
             echo "packages=$PACKAGES" >> $GITHUB_OUTPUT
 
@@ -86,11 +65,9 @@ jobs:
 
           INDEX: 1
 
-
           GOLANG_REPO: https://github.com/kenzok8/golang
 
           GOLANG_BRANCH: '1.26'
-
 
 
       - name: Store packages
@@ -99,20 +76,10 @@ jobs:
 
         with:
 
-          name: x86_64-openwrt-25.12-passwall
+          name: x86_64-25.12.0
 
           path: |
 
             bin/packages/x86_64/packages_ci/*.ipk
 
             bin/packages/x86_64/packages_ci/*.apk
-
-
-
-      - name: Show packages
-
-        run: |
-
-          echo "===== Build Result ====="
-
-          ls -lh bin/packages/x86_64/packages_ci/
