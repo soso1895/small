@@ -1,43 +1,49 @@
 name: Build PassWall Xray OpenWrt 25.12 x86_64
 
-
 on:
   workflow_dispatch:
 
-
 jobs:
-
   build:
 
     runs-on: ubuntu-22.04
 
-
     steps:
 
-    - name: Checkout
+    - name: Checkout small
       uses: actions/checkout@v4
 
 
-    - name: Download OpenWrt SDK
-
+    - name: Install build tools
       run: |
+        sudo apt update
+        sudo apt install -y zstd build-essential rsync unzip
 
-        wget https://downloads.openwrt.org/releases/25.12.0/targets/x86/64/openwrt-sdk-25.12.0-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
 
-        tar --use-compress-program=unzstd -xf openwrt-sdk-25.12.0-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
+    - name: Download OpenWrt 25.12 SDK
+      run: |
+        wget -q https://downloads.openwrt.org/releases/25.12.0/targets/x86/64/openwrt-sdk-25.12.0-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
+
+        tar --use-compress-program=unzstd \
+          -xf openwrt-sdk-25.12.0-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
 
         mv openwrt-sdk-* sdk
 
 
-    - name: Copy small feed
-
+    - name: Prepare feeds
       run: |
 
-        cp feeds.conf.default sdk/feeds.conf.default
+        cd sdk
+
+        cat > feeds.conf.default <<EOF
+src-git packages https://github.com/openwrt/packages.git
+src-git luci https://github.com/openwrt/luci.git
+src-git routing https://github.com/openwrt/routing.git
+src-git small $GITHUB_WORKSPACE
+EOF
 
 
     - name: Update feeds
-
       run: |
 
         cd sdk
@@ -47,8 +53,7 @@ jobs:
         ./scripts/feeds install -a
 
 
-    - name: Configure
-
+    - name: Configure SDK
       run: |
 
         cd sdk
@@ -56,26 +61,25 @@ jobs:
         make defconfig
 
 
-    - name: Build packages
-
+    - name: Compile PassWall
       run: |
 
         cd sdk
 
-        make package/luci-app-passwall/compile V=s
+        make package/feeds/small/luci-app-passwall/compile V=s
 
 
-    - name: Collect ipk
-
+    - name: Collect packages
       run: |
 
-        mkdir output
+        mkdir -p output
 
-        find sdk/bin/packages -name "*.ipk" -exec cp {} output/ \;
+        find sdk/bin/packages \
+          -name "*.ipk" \
+          -exec cp {} output/ \;
 
 
-    - name: Upload ipk
-
+    - name: Upload IPK
       uses: actions/upload-artifact@v4
 
       with:
