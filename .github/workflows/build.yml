@@ -1,119 +1,20 @@
-name: Build PassWall Xray OpenWrt 25.12 x86_64
+name: Test GitHub Actions
 
 on:
   workflow_dispatch:
 
 jobs:
-  build:
+  test:
 
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
 
     steps:
 
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        ref: master
+      - name: Checkout
+        uses: actions/checkout@v4
 
-
-    - name: Install dependencies
-      run: |
-        sudo apt update
-        sudo apt install -y \
-          build-essential \
-          clang \
-          flex \
-          bison \
-          gawk \
-          gettext \
-          libncurses-dev \
-          libssl-dev \
-          python3 \
-          rsync \
-          unzip \
-          zstd
-
-
-    - name: Download OpenWrt SDK 25.12 x86_64
-      run: |
-
-        wget -q https://downloads.openwrt.org/releases/25.12.0/targets/x86/64/openwrt-sdk-25.12.0-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
-
-        tar --use-compress-program=unzstd \
-          -xf openwrt-sdk-25.12.0-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
-
-        mv openwrt-sdk-* sdk
-
-
-    - name: Add OpenWrt feeds
-      run: |
-
-        cd sdk
-
-        cat > feeds.conf.default <<EOF
-src-git packages https://github.com/openwrt/packages.git
-src-git luci https://github.com/openwrt/luci.git
-src-git routing https://github.com/openwrt/routing.git
-EOF
-
-
-    - name: Link small packages
-      run: |
-
-        cd sdk
-
-        mkdir -p feeds/small
-
-        cp -r "$GITHUB_WORKSPACE"/* feeds/small/
-
-
-    - name: Update feeds
-      run: |
-
-        cd sdk
-
-        ./scripts/feeds update -a
-
-        ./scripts/feeds install -a
-
-
-    - name: Install PassWall
-      run: |
-
-        cd sdk
-
-        ./scripts/feeds install -p small -f luci-app-passwall
-
-
-    - name: Configure
-      run: |
-
-        cd sdk
-
-        make defconfig
-
-
-    - name: Compile PassWall
-      run: |
-
-        cd sdk
-
-        make package/feeds/small/luci-app-passwall/compile V=s
-
-
-    - name: Collect IPK
-      run: |
-
-        mkdir -p output
-
-        find sdk/bin/packages \
-          -name "*.ipk" \
-          -exec cp {} output/ \;
-
-
-    - name: Upload IPK
-      uses: actions/upload-artifact@v4
-
-      with:
-        name: PassWall-Xray-OpenWrt25.12-x86_64
-        path: output/
+      - name: Test
+        run: |
+          echo "GitHub Actions is working"
+          echo "Repository: $GITHUB_REPOSITORY"
+          echo "Branch: $GITHUB_REF"
