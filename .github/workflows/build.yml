@@ -1,114 +1,118 @@
-name: Build PassWall Xray OpenWrt 25.12 x86_64
+name: T2 Build x86_64 OpenWrt 25.12
 
 on:
   workflow_dispatch:
+    inputs:
+      plugins:
+        description: '留空=默认PassWall相关包，或者输入指定包名'
+        required: false
+        default: ''
 
 jobs:
+
   build:
 
-    runs-on: ubuntu-22.04
+    name: build x86_64-25.12.0
+
+    runs-on: ubuntu-latest
+
 
     steps:
 
-    - name: Checkout small
-      uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+        with:
+          fetch-depth: 0
 
 
-    - name: Install dependencies
-      run: |
-        sudo apt update
-        sudo apt install -y \
-          build-essential \
-          rsync \
-          zstd \
-          python3
+      - name: Get packages
+
+        id: packages
+
+        run: |
+
+          input="${{ github.event.inputs.plugins }}"
+
+          if [ -z "$input" ] || [ "$input" == "*" ]; then
+
+            PACKAGES="
+            luci-app-passwall
+            luci-app-passwall2
+            xray-plugin
+            v2ray-core
+            v2ray-geodata
+            v2ray-geoip
+            v2ray-geosite
+            sing-box
+            hysteria
+            hysteria2
+            naiveproxy
+            brook
+            redsocks2
+            ipt2socks
+            dns2socks
+            tcping
+            chinadns-ng
+            dnsmasq-full
+            "
+
+            echo "packages=$PACKAGES" >> $GITHUB_OUTPUT
+
+          else
+
+            echo "packages=$input" >> $GITHUB_OUTPUT
+
+          fi
 
 
-    - name: Download OpenWrt SDK
-      run: |
+      - name: Build
 
-        wget -q https://downloads.openwrt.org/releases/25.12.0/targets/x86/64/openwrt-sdk-25.12.0-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
+        uses: kenzok8/gh-action-sdk@hash
 
-        tar --use-compress-program=unzstd \
-          -xf openwrt-sdk-25.12.0-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
+        env:
 
-        mv openwrt-sdk-* sdk
+          CONTAINER: immortalwrt/sdk
 
+          ARCH: x86_64-openwrt-25.12.0
 
-    - name: Prepare SDK feeds
-      run: |
+          FEEDNAME: packages_ci
 
-        cd sdk
+          PACKAGES: ${{ steps.packages.outputs.packages }}
 
-        cat > feeds.conf.default <<EOF
-src-git packages https://github.com/openwrt/packages.git
-src-git luci https://github.com/openwrt/luci.git
-src-git routing https://github.com/openwrt/routing.git
-EOF
+          NO_REFRESH_CHECK: true
+
+          IGNORE_ERRORS: true
+
+          INDEX: 1
 
 
-    - name: Update base feeds
-      run: |
+          GOLANG_REPO: https://github.com/kenzok8/golang
 
-        cd sdk
-
-        ./scripts/feeds update -a
-
-        ./scripts/feeds install -a
+          GOLANG_BRANCH: '1.26'
 
 
-    - name: Add small feed
-      run: |
 
-        cd sdk
+      - name: Store packages
 
-        mkdir -p feeds/small
+        uses: actions/upload-artifact@v7.0.0
 
-        rsync -a \
-        --exclude='.git' \
-        "$GITHUB_WORKSPACE/" \
-        feeds/small/
+        with:
 
+          name: x86_64-openwrt-25.12-passwall
 
-    - name: Install PassWall package
-      run: |
+          path: |
 
-        cd sdk
+            bin/packages/x86_64/packages_ci/*.ipk
 
-        ./scripts/feeds install -p small -f luci-app-passwall
+            bin/packages/x86_64/packages_ci/*.apk
 
 
-    - name: Configure
-      run: |
 
-        cd sdk
+      - name: Show packages
 
-        make defconfig
+        run: |
 
+          echo "===== Build Result ====="
 
-    - name: Compile
-      run: |
-
-        cd sdk
-
-        make package/feeds/small/luci-app-passwall/compile V=s
-
-
-    - name: Collect packages
-      run: |
-
-        mkdir output
-
-        find sdk/bin/packages \
-        -name "*.ipk" \
-        -exec cp {} output/ \;
-
-
-    - name: Upload
-      uses: actions/upload-artifact@v4
-
-      with:
-
-        name: PassWall-Xray-OpenWrt25.12-x86_64
-
-        path: output/
+          ls -lh bin/packages/x86_64/packages_ci/
